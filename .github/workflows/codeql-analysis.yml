@@ -61,6 +61,10 @@ jobs:
           sed -i 's/^deb /deb-src /' /etc/apt/sources.list
           apt-get update
 
+      - name: Install libnvme development package
+        run: |
+          apt-get install -y libnvme-dev
+
       - name: Install extra dependencies with Ansible
         run: |
           ansible-playbook -b -i "localhost," -c local misc/install-test-dependencies.yml -e "test_dependencies=false"
