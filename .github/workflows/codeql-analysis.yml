@@ -23,7 +23,6 @@ jobs:
   build-deb:
     name: Build DEB package
     runs-on: ubuntu-24.04
-    needs: analyze
     permissions:
       contents: write          # нужно для создания релиза
     # Запускаем только при пуше тега или ручном запуске (не при PR и не по расписанию)
