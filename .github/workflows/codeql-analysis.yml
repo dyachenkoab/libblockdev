@@ -19,102 +19,120 @@ on:
         type: boolean
         default: false
 
+          name: Build DEB on Debian Bookworm
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 2.1.0)'
+        required: true
+        default: '2.1.0'
+  push:
+    tags:
+      - 'v*'
+
 jobs:
-    build-deb:
-      name: Build DEB package
-      runs-on: ubuntu-24.04
-      permissions:
-        contents: write
-      if: |
-        github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') ||
-        github.event_name == 'workflow_dispatch'
+  build-deb:
+    runs-on: ubuntu-latest          # хост с Linux, необходим для запуска контейнера
+    container:
+      image: debian:bookworm-slim   # используем официальный образ Debian Bookworm
+      options: --user root          # работаем от root (в контейнере это безопасно)
 
-      steps:
-        - name: Checkout repository
-          uses: actions/checkout@v6
+    steps:
+      - name: Install essential tools
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates \
+            git \
+            autoconf-archive \
+            automake \
+            libtool \
+            pkg-config \
+            gtk-doc-tools \
+            libglib2.0-dev \
+            libcryptsetup-dev \
+            libdevmapper-dev \
+            libbytesize-dev \
+            libparted-dev \
+            libyaml-dev \
+            ansible \
+            dpkg-dev \
+            make \
+            gcc \
+            g++
 
-        - name: Install dependencies
-          run: |
-            sudo apt-get update
-            sudo apt-get install -y \
-              autoconf-archive \
-              automake \
-              libtool \
-              pkg-config \
-              gtk-doc-tools \
-              libglib2.0-dev \
-              libcryptsetup-dev \
-              libdevmapper-dev \
-              libbytesize-dev \
-              libparted-dev \
-              libyaml-dev \
-              ansible \
-              dpkg-dev
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-        - name: Install extra dependencies with Ansible
-          run: |
-            ansible-playbook -b -i "localhost," -c local misc/install-test-dependencies.yml -e "test_dependencies=false"
+      # Если в проекте есть playbook для зависимостей, его тоже можно запустить
+      - name: Install extra dependencies with Ansible (optional)
+        run: |
+          ansible-playbook -b -i "localhost," -c local misc/install-test-dependencies.yml -e "test_dependencies=false"
 
-        - name: Configure
-          run: |
-            ./autogen.sh
-            ./configure --prefix=/usr --libdir=/usr/lib/$(dpkg-architecture -qDEB_HOST_MULTIARCH)
+      - name: Configure
+        run: |
+          ./autogen.sh
+          ./configure --prefix=/usr --libdir=/usr/lib/$(dpkg-architecture -qDEB_HOST_MULTIARCH)
 
-        - name: Build
-          run: make -j$(nproc)
+      - name: Build
+        run: make -j$(nproc)
 
-        - name: Set package version
-          id: version
-          run: |
-            if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-              VER="${{ github.event.inputs.version }}"
-            else
-              VER="${GITHUB_REF_NAME#v}"
-            fi
-            echo "version=$VER" >> $GITHUB_OUTPUT
+      - name: Set package version
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            VER="${{ github.event.inputs.version }}"
+          else
+            VER="${GITHUB_REF_NAME#v}"
+          fi
+          echo "version=$VER" >> $GITHUB_OUTPUT
 
-        - name: Install to temporary directory
-          run: |
-            make install DESTDIR=/tmp/libblockdev-pkg
+      - name: Install to temporary directory
+        run: |
+          make install DESTDIR=/tmp/libblockdev-pkg
 
-        - name: Create DEBIAN control file
-          run: |
-            mkdir -p /tmp/libblockdev-pkg/DEBIAN
-            cat > /tmp/libblockdev-pkg/DEBIAN/control <<EOF
-            Package: libblockdev
-            Version: ${{ steps.version.outputs.version }}-1
-            Section: libs
-            Priority: optional
-            Architecture: $(dpkg --print-architecture)
-            Maintainer: builder@github.com
-            Description: Library for manipulating block devices
-            EOF
+      - name: Create DEBIAN control file
+        run: |
+          mkdir -p /tmp/libblockdev-pkg/DEBIAN
+          cat > /tmp/libblockdev-pkg/DEBIAN/control <<EOF
+          Package: libblockdev
+          Version: ${{ steps.version.outputs.version }}-1
+          Section: libs
+          Priority: optional
+          Architecture: $(dpkg --print-architecture)
+          Maintainer: builder@github.com
+          Description: Library for manipulating block devices
+          EOF
 
-        - name: Build DEB package
-          run: |
-            cd /tmp
-            dpkg-deb --build libblockdev-pkg libblockdev-${{ steps.version.outputs.version }}-1.deb
-            mkdir -p ${{ github.workspace }}/debian-packages
-            mv *.deb ${{ github.workspace }}/debian-packages/
+      - name: Build DEB package
+        run: |
+          cd /tmp
+          dpkg-deb --build libblockdev-pkg libblockdev-${{ steps.version.outputs.version }}-1.deb
+          mkdir -p ${{ github.workspace }}/debian-packages
+          mv *.deb ${{ github.workspace }}/debian-packages/
 
-        - name: Upload DEB package as artifact
-          uses: actions/upload-artifact@v4
-          with:
-            name: libblockdev-deb-package
-            path: ${{ github.workspace }}/debian-packages/*.deb
-            if-no-files-found: error
+      - name: Upload DEB package as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: libblockdev-deb-package-bookworm
+          path: ${{ github.workspace }}/debian-packages/*.deb
+          if-no-files-found: error
 
-        - name: Create Release
-          if: |
-            github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') ||
-            (github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true')
-          uses: softprops/action-gh-release@v2
-          with:
-            tag_name: ${{ github.event_name == 'push' && github.ref_name || steps.version.outputs.version }}
-            name: Release ${{ steps.version.outputs.version }}
-            files: ${{ github.workspace }}/debian-packages/*.deb
-            draft: false
-            prerelease: false
-            generate_release_notes: true
-          env:
-            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create Release (if tag or manual with flag)
+        if: |
+          github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') ||
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event_name == 'push' && github.ref_name || steps.version.outputs.version }}
+          name: Release ${{ steps.version.outputs.version }}
+          files: ${{ github.workspace }}/debian-packages/*.deb
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
