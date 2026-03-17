@@ -26,6 +26,9 @@ jobs:
       image: debian:bookworm-slim   # используем официальный образ Debian Bookworm
       options: --user root          # работаем от root (в контейнере это безопасно)
 
+    - name: Checkout repository
+        uses: actions/checkout@v6
+
     steps:
       - name: Install essential tools
         run: |
