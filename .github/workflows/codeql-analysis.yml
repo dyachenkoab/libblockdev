@@ -105,23 +105,17 @@ jobs:
           EOF
 
       - name: Build DEB package
+        id: create_deb
         run: |
-          cd /tmp
           dpkg-deb --build libblockdev-pkg libblockdev-${{ steps.version.outputs.version }}-1.deb
-          ls -la
-          mkdir -p ${{ github.workspace }}/debian-packages
-          mv *.deb ${{ github.workspace }}/debian-packages/
 
-      - name: Verify moved package
-        run: |
-          ls -la ${{ github.workspace }}/debian-packages/
-
+      # Загружаем DEB-пакет как артефакт
       - name: Upload DEB package as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: libblockdev-deb-package-bookworm
-          path: ${{ github.workspace }}/debian-packages/libblockdev-${{ steps.version.outputs.version }}-1.deb
-          if-no-files-found: error
+          name: libblockdev-deb-package
+          path: ${{ steps.create_deb.outputs.deb_file }}
+          if-no-files-found: error    
 
       - name: Create Release (if tag or manual with flag)
         if: |
