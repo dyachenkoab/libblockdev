@@ -116,6 +116,9 @@ jobs:
           echo "version=$VER" >> $GITHUB_OUTPUT
           echo "Package version: $VER"
 
+      - name: Clean up possible leftover directories
+        run: sudo rm -rf /usr/local/include/blockdev
+
       # Создаём DEB-пакет с checkinstall (без установки)
       - name: Create DEB package with checkinstall
         id: create_deb
