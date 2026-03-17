@@ -120,7 +120,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: libblockdev-deb-package-bookworm
-          path: ${{ github.workspace }}/debian-packages/*.deb
+          path: ${{ github.workspace }}/debian-packages/libblockdev-${{ steps.version.outputs.version }}-1.deb
           if-no-files-found: error
 
       - name: Create Release (if tag or manual with flag)
