@@ -21,17 +21,6 @@ on:
 
           name: Build DEB on Debian Bookworm
 
-on:
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version to release (e.g., 2.1.0)'
-        required: true
-        default: '2.1.0'
-  push:
-    tags:
-      - 'v*'
-
 jobs:
   build-deb:
     runs-on: ubuntu-latest          # хост с Linux, необходим для запуска контейнера
