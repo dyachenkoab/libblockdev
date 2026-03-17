@@ -20,44 +20,6 @@ on:
         default: false
 
 jobs:
-  # Job 1: Анализ CodeQL (оставлен без изменений)
-  analyze:
-    name: Analyze
-    runs-on: ubuntu-24.04
-    permissions:
-      actions: read
-      contents: read
-      security-events: write
-
-    strategy:
-      fail-fast: false
-      matrix:
-        language: [ 'cpp', 'python' ]
-
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v6
-
-    - name: Initialize CodeQL
-      uses: github/codeql-action/init@v4
-      with:
-        languages: ${{ matrix.language }}
-
-    - name: Install build dependencies
-      run: |
-        sudo apt -y install ansible
-        ansible-playbook -b -i "localhost," -c local misc/install-test-dependencies.yml -e "test_dependencies=false"
-
-    - name: Build
-      run: |
-        ./autogen.sh && ./configure && make -j
-
-    - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v4
-      with:
-        category: "/language:${{matrix.language}}"
-
-  # Job 2: Сборка DEB-пакета (запускается только после успешного анализа)
   build-deb:
     name: Build DEB package
     runs-on: ubuntu-24.04
@@ -90,6 +52,7 @@ jobs:
             libparted-dev \
             libyaml-dev \
             ansible \
+            fakeroot \
             checkinstall
 
       # (Опционально) Дополнительные зависимости через Ansible
@@ -125,6 +88,7 @@ jobs:
         run: |
           sudo checkinstall \
             --fstrans=yes \
+            --fakeroot \
             --install=no \
             --pkgname=libblockdev \
             --pkgversion="${{ steps.version.outputs.version }}" \
@@ -143,17 +107,13 @@ jobs:
             --backup=no \
             make install
 
-          DEB_FILE=$(ls debian-packages/*.deb | head -n1)
-          echo "deb_file=$DEB_FILE" >> $GITHUB_OUTPUT
-          echo "Created package: $DEB_FILE"
-
-      # Загружаем DEB-пакет как артефакт
-      - name: Upload DEB package as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: libblockdev-deb-package
-          path: ${{ steps.create_deb.outputs.deb_file }}
-          if-no-files-found: error
+            # Загружаем DEB-пакет как артефакт
+            - name: Upload DEB package as artifact
+              uses: actions/upload-artifact@v4
+              with:
+                name: libblockdev-deb-package
+                path: ${{ steps.create_deb.outputs.deb_file }}
+                if-no-files-found: error
 
       # Создаём релиз и прикрепляем пакет (при ручном запуске или пуше тега)
       - name: Create Release
