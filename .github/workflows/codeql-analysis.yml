@@ -118,7 +118,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: libblockdev-deb-package
-          path: ${{ steps.create_deb.outputs.deb_file }}
+          path: libblockdev-4.1.0-1.deb
           if-no-files-found: error    
 
       - name: Create Release (if tag or manual with flag)
