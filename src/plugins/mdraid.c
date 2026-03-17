@@ -1017,6 +1017,7 @@ BDMDExamineData* bd_md_examine (const gchar *device, GError **error) {
             g_free (ret->level);
             ret->level = g_strdup (value);
         } else if (!ret->uuid && g_str_has_prefix (output_fields[i], "MD_UUID=")) {
+            g_strstrip(output_fields[i]);
             value = strchr (output_fields[i], '=');
             value++;
             ret->uuid = bd_md_canonicalize_uuid (value, error);
