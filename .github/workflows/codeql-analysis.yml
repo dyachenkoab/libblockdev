@@ -81,9 +81,9 @@ jobs:
         id: version
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            VER="${{ github.event.inputs.version }}"
+            VER="4.1.0"
           else
-            VER="${GITHUB_REF_NAME#v}"
+            VER="4.1.0"
           fi
           echo "version=$VER" >> $GITHUB_OUTPUT
 
