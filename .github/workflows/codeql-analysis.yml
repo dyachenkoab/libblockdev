@@ -20,12 +20,12 @@ on:
         default: false
 
 jobs:
-  build-deb:
+    build-deb:
     name: Build DEB package
     runs-on: ubuntu-24.04
+    needs: analyze
     permissions:
-      contents: write          # нужно для создания релиза
-    # Запускаем только при пуше тега или ручном запуске (не при PR и не по расписанию)
+      contents: write
     if: |
       github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') ||
       github.event_name == 'workflow_dispatch'
@@ -34,7 +34,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      # Устанавливаем зависимости, включая checkinstall
       - name: Install dependencies
         run: |
           sudo apt-get update
@@ -50,71 +49,62 @@ jobs:
             libbytesize-dev \
             libparted-dev \
             libyaml-dev \
-            ansible \
-            fakeroot \
-            checkinstall
+            ansible
 
-      # (Опционально) Дополнительные зависимости через Ansible
       - name: Install extra dependencies with Ansible
         run: |
           ansible-playbook -b -i "localhost," -c local misc/install-test-dependencies.yml -e "test_dependencies=false"
 
-      # Конфигурация и сборка (повторяем, так как в analyze не сохраняются артефакты)
       - name: Configure
         run: ./autogen.sh && ./configure
 
       - name: Build
         run: make -j$(nproc)
 
-      # Определяем версию пакета
       - name: Set package version
         id: version
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             VER="${{ github.event.inputs.version }}"
           else
-            VER="${GITHUB_REF_NAME#v}"   # убираем 'v' из тега
+            VER="${GITHUB_REF_NAME#v}"
           fi
           echo "version=$VER" >> $GITHUB_OUTPUT
-          echo "Package version: $VER"
 
-      - name: Clean up possible leftover directories
-        run: sudo rm -rf /usr/local/include/blockdev
-
-      # Создаём DEB-пакет с checkinstall (без установки)
-      - name: Create DEB package with checkinstall
-        id: create_deb
+      # Устанавливаем во временную директорию
+      - name: Install to temporary directory
         run: |
-          sudo checkinstall \
-            --fstrans=yes \
-            --fakeroot \
-            --install=no \
-            --pkgname=libblockdev \
-            --pkgversion="${{ steps.version.outputs.version }}" \
-            --pkgrelease="1" \
-            --pkglicense="LGPL" \
-            --pkggroup="libs" \
-            --maintainer="builder@github.com" \
-            --pakdir="$(pwd)/debian-packages" \
-            --nodoc \
-            --strip=no \
-            --stripso=no \
-            --addso=yes \
-            --gzman=yes \
-            --deldoc=yes \
-            --deldesc=yes \
-            --backup=no \
-            make install
+          make install DESTDIR=/tmp/libblockdev-pkg
 
-            # Загружаем DEB-пакет как артефакт
-            - name: Upload DEB package as artifact
-              uses: actions/upload-artifact@v4
-              with:
-                name: libblockdev-deb-package
-                path: ${{ steps.create_deb.outputs.deb_file }}
-                if-no-files-found: error
+      # Создаём структуру DEBIAN/control
+      - name: Create DEBIAN control file
+        run: |
+          mkdir -p /tmp/libblockdev-pkg/DEBIAN
+          cat > /tmp/libblockdev-pkg/DEBIAN/control <<EOF
+          Package: libblockdev
+          Version: ${{ steps.version.outputs.version }}-1
+          Section: libs
+          Priority: optional
+          Architecture: amd64
+          Maintainer: builder@github.com
+          Description: Library for manipulating block devices
+          EOF
 
-      # Создаём релиз и прикрепляем пакет (при ручном запуске или пуше тега)
+      # Собираем .deb пакет
+      - name: Build DEB package
+        run: |
+          cd /tmp
+          dpkg-deb --build libblockdev-pkg libblockdev-${{ steps.version.outputs.version }}-1.deb
+          mkdir -p ${{ github.workspace }}/debian-packages
+          mv *.deb ${{ github.workspace }}/debian-packages/
+
+      - name: Upload DEB package as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: libblockdev-deb-package
+          path: ${{ github.workspace }}/debian-packages/*.deb
+          if-no-files-found: error
+
       - name: Create Release
         if: |
           github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') ||
@@ -123,7 +113,7 @@ jobs:
         with:
           tag_name: ${{ github.event_name == 'push' && github.ref_name || steps.version.outputs.version }}
           name: Release ${{ steps.version.outputs.version }}
-          files: ${{ steps.create_deb.outputs.deb_file }}
+          files: ${{ github.workspace }}/debian-packages/*.deb
           draft: false
           prerelease: false
           generate_release_notes: true
