@@ -19,8 +19,6 @@ on:
         type: boolean
         default: false
 
-          name: Build DEB on Debian Bookworm
-
 jobs:
   build-deb:
     runs-on: ubuntu-latest          # хост с Linux, необходим для запуска контейнера
@@ -124,4 +122,4 @@ jobs:
           prerelease: false
           generate_release_notes: true
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}          
