@@ -50,12 +50,11 @@ jobs:
             gcc \
             g++
 
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - name: Enable source repositories for build-dep
+        run: |
+          sed -i 's/^deb /deb-src /' /etc/apt/sources.list
+          apt-get update
 
-      # Если в проекте есть playbook для зависимостей, его тоже можно запустить
       - name: Install extra dependencies with Ansible (optional)
         run: |
           ansible-playbook -b -i "localhost," -c local misc/install-test-dependencies.yml -e "test_dependencies=false"
