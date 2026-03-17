@@ -89,12 +89,12 @@ jobs:
 
       - name: Install to temporary directory
         run: |
-          make install
+          make install DESTDIR=/tmp/libblockdev-pkg
 
       - name: Create DEBIAN control file
         run: |
-          mkdir -p libblockdev-pkg/DEBIAN
-          cat > libblockdev-pkg/DEBIAN/control <<EOF
+          mkdir -p /tmp/libblockdev-pkg/DEBIAN
+          cat > /tmp/libblockdev-pkg/DEBIAN/control <<EOF
           Package: libblockdev
           Version: ${{ steps.version.outputs.version }}-1
           Section: libs
@@ -105,21 +105,16 @@ jobs:
           EOF
 
       - name: Build DEB package
-        id: create_deb
         run: |
+          cd /tmp
           dpkg-deb --build libblockdev-pkg libblockdev-${{ steps.version.outputs.version }}-1.deb
-     
-      - name: ttt
-        run: |
-          ls -al ${{ steps.create_deb.outputs.deb_file }}
 
-      # Загружаем DEB-пакет как артефакт
       - name: Upload DEB package as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: libblockdev-deb-package
-          path: libblockdev-4.1.0-1.deb
-          if-no-files-found: error    
+          name: libblockdev-deb-package-bookworm
+          path: /tmp/libblockdev-4.1.0-1.deb
+          if-no-files-found: error
 
       - name: Create Release (if tag or manual with flag)
         if: |
