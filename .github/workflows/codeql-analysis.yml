@@ -108,14 +108,18 @@ jobs:
         id: create_deb
         run: |
           dpkg-deb --build libblockdev-pkg libblockdev-${{ steps.version.outputs.version }}-1.deb
+     
+     - name: ttt
+        run: |
+          ls -al ${{ steps.create_deb.outputs.deb_file }}
 
       # Загружаем DEB-пакет как артефакт
-        - name: Upload DEB package as artifact
-          uses: actions/upload-artifact@v4
-          with:
-            name: libblockdev-deb-package
-            path: ${{ steps.create_deb.outputs.deb_file }}
-            if-no-files-found: error    
+      - name: Upload DEB package as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: libblockdev-deb-package
+          path: ${{ steps.create_deb.outputs.deb_file }}
+          if-no-files-found: error    
 
       - name: Create Release (if tag or manual with flag)
         if: |
