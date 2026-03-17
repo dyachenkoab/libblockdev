@@ -89,12 +89,12 @@ jobs:
 
       - name: Install to temporary directory
         run: |
-          make install DESTDIR=/tmp/libblockdev-pkg
+          make install
 
       - name: Create DEBIAN control file
         run: |
-          mkdir -p /tmp/libblockdev-pkg/DEBIAN
-          cat > /tmp/libblockdev-pkg/DEBIAN/control <<EOF
+          mkdir -p libblockdev-pkg/DEBIAN
+          cat > libblockdev-pkg/DEBIAN/control <<EOF
           Package: libblockdev
           Version: ${{ steps.version.outputs.version }}-1
           Section: libs
