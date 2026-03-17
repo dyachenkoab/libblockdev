@@ -48,14 +48,17 @@ jobs:
               libbytesize-dev \
               libparted-dev \
               libyaml-dev \
-              ansible
+              ansible \
+              dpkg-dev
 
         - name: Install extra dependencies with Ansible
           run: |
             ansible-playbook -b -i "localhost," -c local misc/install-test-dependencies.yml -e "test_dependencies=false"
 
         - name: Configure
-          run: ./autogen.sh && ./configure
+          run: |
+            ./autogen.sh
+            ./configure --prefix=/usr --libdir=/usr/lib/$(dpkg-architecture -qDEB_HOST_MULTIARCH)
 
         - name: Build
           run: make -j$(nproc)
@@ -70,12 +73,10 @@ jobs:
             fi
             echo "version=$VER" >> $GITHUB_OUTPUT
 
-        # Устанавливаем во временную директорию
         - name: Install to temporary directory
           run: |
             make install DESTDIR=/tmp/libblockdev-pkg
 
-        # Создаём структуру DEBIAN/control
         - name: Create DEBIAN control file
           run: |
             mkdir -p /tmp/libblockdev-pkg/DEBIAN
@@ -84,12 +85,11 @@ jobs:
             Version: ${{ steps.version.outputs.version }}-1
             Section: libs
             Priority: optional
-            Architecture: amd64
+            Architecture: $(dpkg --print-architecture)
             Maintainer: builder@github.com
             Description: Library for manipulating block devices
             EOF
 
-        # Собираем .deb пакет
         - name: Build DEB package
           run: |
             cd /tmp
