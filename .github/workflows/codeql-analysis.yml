@@ -3,11 +3,17 @@ name: "CodeQL and Release"
 on:
   push:
     branches: [ "master" ]
+    tags: [ "v*" ]                     # запуск при пуше тега v1.0, v2.0 и т.д.
   pull_request:
     branches: [ "master" ]
   schedule:
     - cron: '29 9 * * 4'
-  workflow_dispatch:              # ручной запуск
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag for release (e.g., v1.2.3)'
+        required: true
+        type: string
 
 jobs:
   analyze:
@@ -15,7 +21,7 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       actions: read
-      contents: write             # нужно для создания релиза
+      contents: write                   # нужно для создания релиза
       security-events: write
 
     strategy:
@@ -27,45 +33,47 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v6
 
-    # Инициализация CodeQL
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v4
       with:
         languages: ${{ matrix.language }}
 
-    # Установка зависимостей
     - name: Install build dependencies
       run: |
         sudo apt -y install ansible
         ansible-playbook -b -i "localhost," -c local misc/install-test-dependencies.yml -e "test_dependencies=false"
 
-    # Сборка
     - name: Build
       run: |
         ./autogen.sh && ./configure && make -j
 
-    # Упаковка артефактов (например, создание tar.gz)
     - name: Package artifacts
-      if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
       run: |
-        make dist-gzip             # если Makefile поддерживает создание дистрибутива
-        # или вручную: tar czf libblockdev.tar.gz --transform 's,^,libblockdev-${GITHUB_REF_NAME}/,' *
+        make dist-gzip || tar czf libblockdev.tar.gz --transform 's,^,libblockdev-${GITHUB_REF_NAME}/,' *
 
-    # Создание релиза (только для тегов или ручного запуска)
+    - name: Set tag name
+      id: tag
+      run: |
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          echo "value=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+        else
+          echo "value=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        fi
+
     - name: Create Release
-      if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+      if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v2
       with:
+        tag_name: ${{ steps.tag.outputs.value }}
+        name: Release ${{ steps.tag.outputs.value }}
         files: |
           *.tar.gz
-          # можно добавить другие файлы, например, .deb
         draft: false
         prerelease: false
         generate_release_notes: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    # CodeQL анализ
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v4
       with:
